@@ -33,13 +33,9 @@ post {
 
 **Required** The path to the XML file(s) for the test results. Can be a directory (e.g., `test/reports`), a single file (e.g., `reports/junit.xml`), or a glob (e.g., `app/*/results/*.xml`).
 
-### `key`
+### `keyCredentialId`
 
-**Required** The `BUILDPULSE_ACCESS_KEY_ID` for the account that owns the repository.
-
-### `secret`
-
-**Required** The `BUILDPULSE_SECRET_ACCESS_KEY` for the account that owns the repository.
+**Required** The Jenkins Credential (Username and Password) ID. For the credential, set the username to the value of `BUILDPULSE_ACCESS_KEY_ID` in the dashboard. Set the password to the value of `BUILDPULSE_SECRET_ACCESS_KEY` in the dashboard.
 
 ### `commit`
 

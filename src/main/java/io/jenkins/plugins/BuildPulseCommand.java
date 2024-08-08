@@ -15,7 +15,6 @@ import java.util.Arrays;
 
 import org.kohsuke.stapler.verb.POST;
 
-@SuppressWarnings("lgtm[jenkins/plaintext-storage]")
 public class BuildPulseCommand {
     private String accountId;
     private String repositoryId;

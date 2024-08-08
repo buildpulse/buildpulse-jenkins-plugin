@@ -4,6 +4,8 @@ import hudson.Extension;
 import hudson.FilePath;
 import hudson.model.Run;
 import hudson.model.TaskListener;
+import hudson.security.ACL;
+import jenkins.model.Jenkins;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -11,6 +13,7 @@ import java.util.Collections;
 import java.util.Set;
 
 import org.apache.commons.io.IOUtils;
+import org.jenkinsci.plugins.plaincredentials.StringCredentials;
 import org.jenkinsci.plugins.workflow.steps.Step;
 import org.jenkinsci.plugins.workflow.steps.StepContext;
 import org.jenkinsci.plugins.workflow.steps.StepDescriptor;
@@ -19,13 +22,19 @@ import org.jenkinsci.plugins.workflow.steps.SynchronousNonBlockingStepExecution;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
 
+import com.cloudbees.plugins.credentials.CredentialsProvider;
+import com.cloudbees.plugins.credentials.CredentialsMatchers;
+import com.cloudbees.plugins.credentials.common.StandardUsernameCredentials;
+import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials;
+import com.cloudbees.plugins.credentials.common.UsernameCredentials;
+import com.cloudbees.plugins.credentials.domains.DomainRequirement;
 import com.google.inject.Inject;
 
 public class BuildPulseStep extends Step {
     String accountId;
     String repositoryId;
     String junitXMLPaths;
-    String keyId; // lgtm[jenkins/plaintext-storage]
+    String key;
     String secret;
     String commitSHA;
     String branch;
@@ -37,14 +46,29 @@ public class BuildPulseStep extends Step {
     String quota;
 
     @DataBoundConstructor
-    public BuildPulseStep(String account, String repository, String path, String key, String secret, String commit, String branch) {
+    public BuildPulseStep(String account, String repository, String path, String keyCredentialId, String commit, String branch) {
         this.accountId = account;
         this.repositoryId = repository;
         this.junitXMLPaths = path;
-        this.keyId = key;
-        this.secret = secret;
         this.commitSHA = commit;
         this.branch = branch;
+
+        // Retrieve the credential object using the credential ID
+        @SuppressWarnings("deprecation") // CredentialsProvider.lookupCredentials argument needs to be updated
+        StandardUsernamePasswordCredentials credentials = CredentialsMatchers.firstOrNull(
+                CredentialsProvider.lookupCredentials(
+                        StandardUsernamePasswordCredentials.class,
+                        Jenkins.get(),
+                        ACL.SYSTEM,
+                        Collections.<DomainRequirement>emptyList()),
+                CredentialsMatchers.withId(keyCredentialId));
+
+        if(credentials == null) {
+            throw new IllegalArgumentException("No credentials found for ID: " + keyCredentialId);
+        }
+
+        this.key = credentials.getUsername();
+        this.secret = credentials.getPassword().getPlainText();
     }
 
     @DataBoundSetter
@@ -92,13 +116,13 @@ public class BuildPulseStep extends Step {
                 this.step.repositoryPath = workspacePath;
             }
 
-            String[] submitCommand = BuildPulseCommand.submit(this.step.accountId, this.step.repositoryId, this.step.junitXMLPaths, this.step.repositoryPath, this.step.keyId, this.step.secret, workspacePath, this.step.coveragePaths, this.step.tags, this.step.quota);
+            String[] submitCommand = BuildPulseCommand.submit(this.step.accountId, this.step.repositoryId, this.step.junitXMLPaths, this.step.repositoryPath, this.step.key, this.step.secret, workspacePath, this.step.coveragePaths, this.step.tags, this.step.quota);
 
             // Get the build URL
             String buildUrl = this.getContext().get(Run.class).getEnvironment(listener).get("BUILD_URL");
 
             ProcessBuilder processBuilder = new ProcessBuilder(submitCommand);
-            processBuilder.environment().put("BUILDPULSE_ACCESS_KEY_ID", this.step.keyId);
+            processBuilder.environment().put("BUILDPULSE_ACCESS_KEY_ID", this.step.key);
             processBuilder.environment().put("BUILDPULSE_SECRET_ACCESS_KEY", this.step.secret);
             processBuilder.environment().put("BUILD_URL", buildUrl);
             processBuilder.environment().put("GIT_COMMIT", this.step.commitSHA);
